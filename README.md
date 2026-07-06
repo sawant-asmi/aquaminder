@@ -7,6 +7,11 @@ Your pixel-art buddy floats in the bottom-right corner of your screen every
 
 ### Reminders
 - ⏰ Pops up every **30 minutes** with "Time to drink water! 💧"
+- 🕗 Only between **8:00 and 23:00** — reminders due outside that window
+  wait until the next morning at 8:00
+- 😴 **Sleep-proof timing** — the countdown runs on the real clock, so if
+  your Mac sleeps through a reminder, she appears seconds after it wakes
+  instead of being delayed by the nap
 - 💧 **I drank water!** → she says "Good job! 🎉 Stay hydrated!" for 3 seconds,
   then leaves and comes back in 30 minutes
 - ⏰ **Remind later** → she disappears and comes back in **10 minutes**
@@ -80,6 +85,7 @@ Open `water_reminder.py` and edit the settings at the top:
 
 - `REMINDER_INTERVAL_MIN = 30` — main reminder interval (minutes)
 - `SNOOZE_MIN = 10` — "Remind later" snooze time (minutes)
+- `ACTIVE_START_HOUR = 8` / `ACTIVE_END_HOUR = 23` — reminder hours
 - `GOOD_JOB_SECONDS = 3` — how long "Good job! 🎉" stays on screen
 - `SHOW_ON_LAUNCH = True` — pop up immediately when started
 - `FRAME_DELAY_MS = 100` — animation speed (lower = faster)

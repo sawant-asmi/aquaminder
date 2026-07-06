@@ -12,6 +12,7 @@ Quit with the ✕ button on the popup, or Ctrl+C in the terminal.
 import os
 import signal
 import sys
+from datetime import datetime, timedelta
 
 from PySide6.QtCore import Qt, QTimer, QRectF
 from PySide6.QtGui import (
@@ -29,6 +30,9 @@ SNOOZE_MIN = 10                 # snooze interval (minutes)
 FRAME_DELAY_MS = 100            # animation speed (10 fps)
 GOOD_JOB_SECONDS = 3            # how long "Good job!" stays on screen
 SHOW_ON_LAUNCH = True           # show once immediately so you can test it
+ACTIVE_START_HOUR = 8           # no reminders before 8:00
+ACTIVE_END_HOUR = 23            # no reminders at/after 23:00
+CHECK_EVERY_MS = 5000           # how often to compare the clock to the deadline
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FRAMES_DIR = os.path.join(HERE, "character")
@@ -213,9 +217,14 @@ class WaterReminder(QWidget):
         self.anim_timer.timeout.connect(self.animate)
         self.anim_timer.start(FRAME_DELAY_MS)
 
-        self.reminder_timer = QTimer(self)
-        self.reminder_timer.setSingleShot(True)
-        self.reminder_timer.timeout.connect(self.show_reminder)
+        # Wall-clock scheduling: QTimers pause while the Mac sleeps, so instead
+        # of one long timer we store a deadline and compare it to the real
+        # clock every few seconds. After waking from sleep, an overdue
+        # reminder fires within seconds instead of being pushed back.
+        self.next_due = None
+        self.check_timer = QTimer(self)
+        self.check_timer.timeout.connect(self.check_due)
+        self.check_timer.start(CHECK_EVERY_MS)
 
         self.hide_timer = QTimer(self)
         self.hide_timer.setSingleShot(True)
@@ -228,7 +237,29 @@ class WaterReminder(QWidget):
 
     # ------------------ helpers ------------------
     def schedule(self, minutes):
-        self.reminder_timer.start(int(minutes * 60 * 1000))
+        self.next_due = self.clamp_to_active_hours(
+            datetime.now() + timedelta(minutes=minutes))
+
+    @staticmethod
+    def clamp_to_active_hours(due):
+        """Push a deadline that falls outside 8:00-23:00 to the next 8:00."""
+        if due.hour >= ACTIVE_END_HOUR:
+            due = due + timedelta(days=1)
+        elif due.hour >= ACTIVE_START_HOUR:
+            return due
+        return due.replace(hour=ACTIVE_START_HOUR, minute=0,
+                           second=0, microsecond=0)
+
+    def check_due(self):
+        if self.next_due is None or datetime.now() < self.next_due:
+            return
+        # woke up outside active hours with an overdue reminder -> defer to 8:00
+        clamped = self.clamp_to_active_hours(datetime.now())
+        if clamped > datetime.now():
+            self.next_due = clamped
+            return
+        self.next_due = None
+        self.show_reminder()
 
     def place_window(self):
         self.adjustSize()
