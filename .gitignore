@@ -1,0 +1,16 @@
+# virtual environment (1.2 GB — recreate with the README setup steps)
+venv/
+.venv/
+
+# python cache
+__pycache__/
+*.pyc
+
+# local editor / assistant settings
+.claude/
+
+# macOS cruft
+.DS_Store
+
+# local backup of the original frames (pre-cleanup)
+character_original/
