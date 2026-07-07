@@ -26,6 +26,17 @@ Your pixel-art buddy floats in the bottom-right corner of your screen every
 - 🌸 Pastel pink theme matched to her dress: coral speech bubble with a
   pointer, white text, pink gradient pill buttons
 
+### Hidden panel — double-click her 🖱️
+The reminder view stays minimal on purpose. Everything extra lives in a
+panel that opens when you **double-click her**:
+- 💧 **Glasses today** — every "I drank water!" click is counted
+  (resets each morning, survives restarts)
+- 🕐 **Next reminder time**
+- ⏸ **Pause 1 hour** — for meetings / presentations
+- 👋 **Quit AquaMinder**
+
+Double-click again to close it.
+
 ### Behavior
 - 🖥️ **Multi-monitor aware** — she appears on whichever screen your mouse
   is on, laptop or extended display

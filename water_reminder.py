@@ -9,10 +9,11 @@ Run with:  venv/bin/python water_reminder.py
 Quit with the ✕ button on the popup, or Ctrl+C in the terminal.
 """
 
+import json
 import os
 import signal
 import sys
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from PySide6.QtCore import Qt, QTimer, QRectF
 from PySide6.QtGui import (
@@ -36,6 +37,26 @@ CHECK_EVERY_MS = 5000           # how often to compare the clock to the deadline
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FRAMES_DIR = os.path.join(HERE, "character")
+STATE_FILE = os.path.expanduser("~/.aquaminder.json")   # daily glass counter
+
+
+def glasses_today():
+    try:
+        with open(STATE_FILE) as f:
+            d = json.load(f)
+        if d.get("date") == date.today().isoformat():
+            return int(d.get("glasses", 0))
+    except (OSError, ValueError):
+        pass
+    return 0
+
+
+def save_glasses(n):
+    try:
+        with open(STATE_FILE, "w") as f:
+            json.dump({"date": date.today().isoformat(), "glasses": n}, f)
+    except OSError:
+        pass
 
 BUBBLE_BG = QColor("#ff8082")           # her shoe pink
 TEXT_ON_BUBBLE = "#ffffff"
@@ -55,6 +76,18 @@ QPushButton#close {
     border: none;
 }
 QPushButton#close:hover { color: #ffffff; }
+QLabel#panelBig {
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 700;
+    background: transparent;
+}
+QLabel#panelSmall {
+    color: rgba(255, 255, 255, 215);
+    font-size: 13px;
+    font-weight: 600;
+    background: transparent;
+}
 """
 
 # macOS + translucent windows drop widget background fills, so buttons are
@@ -204,13 +237,40 @@ class WaterReminder(QWidget):
         btn_layout.addWidget(self.btn_snooze)
         btn_layout.addStretch()
 
+        # ------------------ hidden panel (double-click her to open) ---------
+        self.panel = Bubble()
+        panel_col = QVBoxLayout(self.panel)
+        panel_col.setContentsMargins(26, TAIL_H + 14, 26, 18)
+        panel_col.setSpacing(9)
+
+        self.panel_count = QLabel("")
+        self.panel_count.setObjectName("panelBig")
+        self.panel_count.setAlignment(Qt.AlignCenter)
+
+        self.panel_next = QLabel("")
+        self.panel_next.setObjectName("panelSmall")
+        self.panel_next.setAlignment(Qt.AlignCenter)
+
+        btn_pause = PillButton("⏸ Pause 1 hour", "snooze")
+        btn_pause.clicked.connect(self.on_pause)
+        btn_quit = PillButton("👋 Quit AquaMinder", "snooze")
+        btn_quit.clicked.connect(QApplication.quit)
+
+        panel_col.addWidget(self.panel_count)
+        panel_col.addWidget(self.panel_next)
+        panel_col.addWidget(btn_pause, alignment=Qt.AlignCenter)
+        panel_col.addWidget(btn_quit, alignment=Qt.AlignCenter)
+        self.panel.hide()
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 0, 10, 10)
         layout.setSpacing(0)
         layout.addWidget(self.char_label)
         layout.addWidget(self.bubble)
         layout.addWidget(self.btn_row)
+        layout.addWidget(self.panel)
         self.setStyleSheet(STYLE)
+        self.awaiting = False          # a reminder is on screen, unanswered
 
         # ------------------ timers ------------------
         self.anim_timer = QTimer(self)
@@ -277,7 +337,10 @@ class WaterReminder(QWidget):
     # ------------------ reminder flow ------------------
     def show_reminder(self):
         self.hide_timer.stop()
+        self.awaiting = True
+        self.panel.hide()
         self.msg.setText("Time to drink water! 💧")
+        self.bubble.show()
         self.btn_row.show()
         self.place_window()
         self.show()
@@ -285,6 +348,9 @@ class WaterReminder(QWidget):
         QApplication.beep()
 
     def on_drank(self):
+        self.awaiting = False
+        n = glasses_today() + 1
+        save_glasses(n)
         self.msg.setText("Good job! 🎉 Stay hydrated!")
         self.btn_row.hide()
         self.place_window()
@@ -292,8 +358,48 @@ class WaterReminder(QWidget):
         self.schedule(REMINDER_INTERVAL_MIN)
 
     def on_snooze(self):
+        self.awaiting = False
         self.hide()
         self.schedule(SNOOZE_MIN)
+
+    # ------------------ hidden panel (double-click) ------------------
+    def mouseDoubleClickEvent(self, event):
+        self.toggle_panel()
+
+    def toggle_panel(self):
+        if self.panel.isVisible():
+            self.panel.hide()
+            self.bubble.show()
+            self.btn_row.show()
+            if self.awaiting:
+                self.place_window()
+            else:
+                self.hide()            # nothing pending -> she slips away
+            return
+        self.hide_timer.stop()
+        n = glasses_today()
+        self.panel_count.setText(
+            f"💧 {n} glass{'es' if n != 1 else ''} today")
+        if self.awaiting:
+            self.panel_next.setText("She's waiting for you 💧")
+        elif self.next_due:
+            self.panel_next.setText(
+                "Next reminder: " + self.next_due.strftime("%-I:%M %p"))
+        else:
+            self.panel_next.setText("")
+        self.bubble.hide()
+        self.btn_row.hide()
+        self.panel.show()
+        self.place_window()
+
+    def on_pause(self):
+        self.awaiting = False
+        self.next_due = self.clamp_to_active_hours(
+            datetime.now() + timedelta(hours=1))
+        self.panel.hide()
+        self.bubble.show()
+        self.btn_row.show()
+        self.hide()
 
 
 def main():
