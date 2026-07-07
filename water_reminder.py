@@ -11,6 +11,7 @@ Quit with the ✕ button on the popup, or Ctrl+C in the terminal.
 
 import json
 import os
+import random
 import signal
 import sys
 from datetime import date, datetime, timedelta
@@ -37,26 +38,53 @@ CHECK_EVERY_MS = 5000           # how often to compare the clock to the deadline
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FRAMES_DIR = os.path.join(HERE, "character")
-STATE_FILE = os.path.expanduser("~/.aquaminder.json")   # daily glass counter
+STATE_FILE = os.path.expanduser("~/.aquaminder.json")   # counter + position
+
+REMINDER_MSGS = [
+    "Time to drink water! 💧",
+    "Hydration check! 💦",
+    "Water break? You've earned it 🥤",
+    "Your plants get water. Why not you? 🌱",
+    "Psst… water time! 🫧",
+    "A sip for me? 🥺💧",
+    "Glug glug o'clock! ⏰💦",
+]
+GOODJOB_MSGS = [
+    "Good job! 🎉 Stay hydrated!",
+    "Yay! 🥳 Keep it up!",
+    "Proud of you! 💖",
+    "Hydration hero! 🦸‍♀️💧",
+    "Cheers! 🥂 See you soon!",
+]
+
+
+def load_state():
+    try:
+        with open(STATE_FILE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(**updates):
+    d = load_state()
+    d.update(updates)
+    try:
+        with open(STATE_FILE, "w") as f:
+            json.dump(d, f)
+    except OSError:
+        pass
 
 
 def glasses_today():
-    try:
-        with open(STATE_FILE) as f:
-            d = json.load(f)
-        if d.get("date") == date.today().isoformat():
-            return int(d.get("glasses", 0))
-    except (OSError, ValueError):
-        pass
+    d = load_state()
+    if d.get("date") == date.today().isoformat():
+        return int(d.get("glasses", 0))
     return 0
 
 
 def save_glasses(n):
-    try:
-        with open(STATE_FILE, "w") as f:
-            json.dump({"date": date.today().isoformat(), "glasses": n}, f)
-    except OSError:
-        pass
+    save_state(date=date.today().isoformat(), glasses=n)
 
 BUBBLE_BG = QColor("#ff8082")           # her shoe pink
 TEXT_ON_BUBBLE = "#ffffff"
@@ -271,6 +299,8 @@ class WaterReminder(QWidget):
         layout.addWidget(self.panel)
         self.setStyleSheet(STYLE)
         self.awaiting = False          # a reminder is on screen, unanswered
+        self._drag_start = None
+        self._dragged = False
 
         # ------------------ timers ------------------
         self.anim_timer = QTimer(self)
@@ -326,9 +356,41 @@ class WaterReminder(QWidget):
         # appear on whichever screen the mouse is on (laptop or extended)
         screen = QApplication.screenAt(QCursor.pos()) or QApplication.primaryScreen()
         geo = screen.availableGeometry()
-        x = geo.right() - self.width() - 30         # bottom-right corner
-        y = geo.bottom() - self.height() - 30
+        st = load_state()
+        if "pos_fx" in st:
+            # she was dragged: use the remembered spot (stored as a fraction
+            # of the screen, so it maps onto any monitor)
+            x = geo.x() + int(st["pos_fx"] * max(geo.width() - self.width(), 1))
+            y = geo.y() + int(st["pos_fy"] * max(geo.height() - self.height(), 1))
+        else:
+            x = geo.right() - self.width() - 30     # bottom-right corner
+            y = geo.bottom() - self.height() - 30
         self.move(x, y)
+
+    # ------------------ dragging ------------------
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._drag_start = event.globalPosition().toPoint()
+            self._drag_window_pos = self.pos()
+            self._dragged = False
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() & Qt.LeftButton and self._drag_start is not None:
+            delta = event.globalPosition().toPoint() - self._drag_start
+            if self._dragged or delta.manhattanLength() > 6:
+                self._dragged = True
+                self.move(self._drag_window_pos + delta)
+
+    def mouseReleaseEvent(self, event):
+        if self._dragged:
+            screen = self.screen() or QApplication.primaryScreen()
+            geo = screen.availableGeometry()
+            fx = (self.x() - geo.x()) / max(geo.width() - self.width(), 1)
+            fy = (self.y() - geo.y()) / max(geo.height() - self.height(), 1)
+            save_state(pos_fx=min(max(fx, 0.0), 1.0),
+                       pos_fy=min(max(fy, 0.0), 1.0))
+        self._drag_start = None
+        self._dragged = False
 
     def animate(self):
         self.char_label.setPixmap(self.frames[self.frame_index])
@@ -339,7 +401,7 @@ class WaterReminder(QWidget):
         self.hide_timer.stop()
         self.awaiting = True
         self.panel.hide()
-        self.msg.setText("Time to drink water! 💧")
+        self.msg.setText(random.choice(REMINDER_MSGS))
         self.bubble.show()
         self.btn_row.show()
         self.place_window()
@@ -351,7 +413,7 @@ class WaterReminder(QWidget):
         self.awaiting = False
         n = glasses_today() + 1
         save_glasses(n)
-        self.msg.setText("Good job! 🎉 Stay hydrated!")
+        self.msg.setText(random.choice(GOODJOB_MSGS))
         self.btn_row.hide()
         self.place_window()
         self.hide_timer.start(GOOD_JOB_SECONDS * 1000)

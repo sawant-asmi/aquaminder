@@ -1,12 +1,17 @@
-# 💧 Water Reminder (macOS)
+# 💧 AquaMinder (macOS)
 
 Your pixel-art buddy floats in the bottom-right corner of your screen every
 **30 minutes** to remind you to drink water.
 
+<p align="center">
+  <img src="assets/reminder.png" width="330" alt="Reminder view">
+  <img src="assets/panel.png" width="330" alt="Double-click panel">
+</p>
+
 ## Features
 
 ### Reminders
-- ⏰ Pops up every **30 minutes** with "Time to drink water! 💧"
+- ⏰ Pops up every **30 minutes** with a different cute message each time
 - 🕗 Only between **8:00 and 23:00** — reminders due outside that window
   wait until the next morning at 8:00
 - 😴 **Sleep-proof timing** — the countdown runs on the real clock, so if
@@ -40,6 +45,8 @@ Double-click again to close it.
 ### Behavior
 - 🖥️ **Multi-monitor aware** — she appears on whichever screen your mouse
   is on, laptop or extended display
+- ✋ **Draggable** — grab her and put her anywhere; she remembers the spot
+  (as a fraction of the screen, so it maps onto any monitor)
 - 🚫 **No Dock icon** — runs as a background (accessory) app; she's also
   invisible in the ⌘-Tab switcher
 - 🤫 **Never steals focus** — she pops up without interrupting your typing
@@ -82,13 +89,36 @@ To stop it later: `pkill -f water_reminder.py`
 
 ## Start automatically at login (optional)
 
-1. Open **Script Editor** (comes with macOS) and paste:
-   ```
-   do shell script "cd ~/Desktop/WaterReminder && nohup venv/bin/python water_reminder.py >/dev/null 2>&1 &"
-   ```
-   (adjust the path if you put the folder somewhere else)
-2. File → Export → File Format: **Application**, save it (e.g. `WaterReminder.app`)
-3. System Settings → General → **Login Items** → add that app
+Create `~/Library/LaunchAgents/com.aquaminder.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+ "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.aquaminder</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/YOU/Desktop/WaterReminder/venv/bin/python</string>
+        <string>/Users/YOU/Desktop/WaterReminder/water_reminder.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/YOU/Desktop/WaterReminder</string>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>
+```
+
+Then load it (starts her immediately and at every login):
+
+```
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.aquaminder.plist
+```
+
+To remove: `launchctl bootout gui/$(id -u)/com.aquaminder` and delete the plist.
 
 ## Customize
 
